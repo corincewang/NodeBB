@@ -1,31 +1,11 @@
-'use strict';
-
-const db = require('../database');
-const user = require('../user');
 
 
 
-
-interface GroupsFunction {
-    getUsersFromSet(set: string, fields?: string[]): Promise<any[]>;
-    getUserGroups(uids: string[]): Promise<any>;
-    getUserGroupsFromSet(set: string, uids: string[]): Promise<any[]>;
-    getUserGroupMembership(set: string, uids: string[]): Promise<any[]>;
-    isMemberOfGroups(uid: string, groupNames: string[]): Promise<boolean[]>;
-    getUserInviteGroups(uid: string): Promise<any[]>;
-    getGroupsData(groupName: string): Promise<any>;
-    getNonPrivilegeGroups(set: string, start: number, end: number): Promise<any[]>;
-    ownership: {
-        isOwner(uid: string, groupName: string): Promise<boolean>;
-    };
-    ephemeralGroups: string[];
-}
+import db from '../database';
+import user from '../user';
 
 
-
-
-
-module.exports = function (Groups: GroupsFunction) {
+export default function (Groups) {
     Groups.getUsersFromSet = async function (set: string, fields: string[]) {
         const uids: string[] = await db.getSetMembers(set);
 
@@ -40,7 +20,7 @@ module.exports = function (Groups: GroupsFunction) {
     };
 
     Groups.getUserGroupsFromSet = async function (set: string, uids: string[]) {
-        const memberOf: any[] = await Groups.getUserGroupMembership(set, uids);
+        const memberOf: string[] = await Groups.getUserGroupMembership(set, uids);
         return await Promise.all(memberOf.map(memberOf => Groups.getGroupsData(memberOf)));
     };
 
@@ -56,23 +36,23 @@ module.exports = function (Groups: GroupsFunction) {
 
     Groups.getUserInviteGroups = async function (uid: string) {
         let allGroups: any[] = await Groups.getNonPrivilegeGroups('groups:createtime', 0, -1);
-        allGroups = allGroups.filter((group: any) => !Groups.ephemeralGroups.includes(group.name));
+        allGroups = allGroups.filter(group => !Groups.ephemeralGroups.includes(group.name));
 
-        const publicGroups: any[] = allGroups.filter((group: any) => group.hidden === 0 && group.system === 0 && group.private === 0);
-        const adminModGroups: any[] = [
+        const publicGroups = allGroups.filter(group => group.hidden === 0 && group.system === 0 && group.private === 0);
+        const adminModGroups = [
             { name: 'administrators', displayName: 'administrators' },
             { name: 'Global Moderators', displayName: 'Global Moderators' },
         ];
         // Private (but not hidden)
-        const privateGroups: any[] = allGroups.filter((group: any) => group.hidden === 0 &&
+        const privateGroups = allGroups.filter(group => group.hidden === 0 &&
             group.system === 0 && group.private === 1);
 
         const [ownership, isAdmin, isGlobalMod] = await Promise.all([
-            Promise.all(privateGroups.map((group: any) => Groups.ownership.isOwner(uid, group.name))),
+            Promise.all(privateGroups.map(group => Groups.ownership.isOwner(uid, group.name))),
             user.isAdministrator(uid),
             user.isGlobalModerator(uid),
         ]);
-        const ownGroups: any[] = privateGroups.filter((group: any[], index) => ownership[index]);
+        const ownGroups = privateGroups.filter((group, index) => ownership[index]);
 
         let inviteGroups: any[] = [];
         if (isAdmin) {
@@ -85,5 +65,5 @@ module.exports = function (Groups: GroupsFunction) {
 
         return inviteGroups
             .concat(publicGroups);
-    }
-};
+    };
+}
